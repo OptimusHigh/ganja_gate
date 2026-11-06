@@ -27,7 +27,7 @@ import java.util.zip.ZipInputStream;
  *
  * Автоматически генерирует whitelist из:
  * 1. Загруженных серверных модов (ModList.get())
- * 2. Всех .jar файлов в mods/ и client_mods/ (включая вложенные JarJar моды в META-INF/jarjar/ и META-INF/jars/)
+ * 2. Всех .jar файлов в mods/ и client_mods/ (включая вложенные JarJar моды)
  *
  * Формат: config/ganjagate.json
  */
@@ -45,15 +45,6 @@ public class GateConfig {
     private static boolean strictMode = true;
     private static boolean autoUpdateWhitelist = true;
     private static String kickMessage = "§c[GanjaGate] Обнаружены неразрешённые моды!\\n\\n§fЗапрещённые моды:\\n§e{mods}\\n\\n§7Удалите их и перезайдите.";
-
-    // Настройки клиента (заголовок и иконка)
-    private static boolean enableCustomTitle = true;
-    private static String titleTemplate = "Ganj4Craft 4 сезон";
-    private static String titleInGameTemplate = "Ganj4Craft 4 сезон — [{player}]";
-    private static boolean enableCustomIcon = true;
-    private static String iconPath16 = "";
-    private static String iconPath32 = "";
-    private static String iconPath48 = "";
 
     public static void load() {
         if (Files.exists(CONFIG_PATH)) {
@@ -75,26 +66,6 @@ public class GateConfig {
                     }
                 }
 
-                // Секция клиента
-                if (root.has("client") && root.get("client").isJsonObject()) {
-                    JsonObject c = root.getAsJsonObject("client");
-                    if (c.has("enable_custom_title")) enableCustomTitle = c.get("enable_custom_title").getAsBoolean();
-                    if (c.has("title_template")) titleTemplate = c.get("title_template").getAsString();
-                    if (c.has("title_in_game_template")) titleInGameTemplate = c.get("title_in_game_template").getAsString();
-                    if (c.has("enable_custom_icon")) enableCustomIcon = c.get("enable_custom_icon").getAsBoolean();
-                    if (c.has("icon_path_16")) iconPath16 = c.get("icon_path_16").getAsString();
-                    if (c.has("icon_path_32")) iconPath32 = c.get("icon_path_32").getAsString();
-                    if (c.has("icon_path_48")) iconPath48 = c.get("icon_path_48").getAsString();
-                } else {
-                    if (root.has("enable_custom_title")) enableCustomTitle = root.get("enable_custom_title").getAsBoolean();
-                    if (root.has("title_template")) titleTemplate = root.get("title_template").getAsString();
-                    if (root.has("title_in_game_template")) titleInGameTemplate = root.get("title_in_game_template").getAsString();
-                    if (root.has("enable_custom_icon")) enableCustomIcon = root.get("enable_custom_icon").getAsBoolean();
-                    if (root.has("icon_path_16")) iconPath16 = root.get("icon_path_16").getAsString();
-                    if (root.has("icon_path_32")) iconPath32 = root.get("icon_path_32").getAsString();
-                    if (root.has("icon_path_48")) iconPath48 = root.get("icon_path_48").getAsString();
-                }
-
                 GanjaGate.LOGGER.info("[GanjaGate] Config loaded from {}", CONFIG_PATH);
             } catch (Exception e) {
                 GanjaGate.LOGGER.error("[GanjaGate] Failed to load config, regenerating", e);
@@ -104,12 +75,10 @@ public class GateConfig {
             generateDefault();
         }
 
-        // Автоматически добавить моды из папки mods/ и client_mods/ в whitelist
         if (autoUpdateWhitelist) {
             updateWhitelistFromServer();
         }
 
-        // Системные моды всегда разрешены
         whitelist.addAll(SYSTEM_MODS);
     }
 
@@ -120,97 +89,91 @@ public class GateConfig {
      * 3. Все jar файлы в папке client_mods/
      */
     private static void updateWhitelistFromServer() {
-        Set<String> discoveredMods = new HashSet<>();
+        int before = whitelist.size();
 
-        // 1. Загруженные серверные моды
-        ModList.get().getMods().forEach(modInfo -> {
-            discoveredMods.add(modInfo.getModId().toLowerCase());
+        // 1. Загруженные сервером моды
+        ModList.get().getMods().forEach(mod -> {
+            whitelist.add(mod.getModId().toLowerCase());
         });
 
-        // 2. Сканируем папку mods/ и client_mods/ для поиска client-*.jar и JarJar модов
+        // 2. Сканируем папку mods/ и client_mods/
         Path gameDir = FMLPaths.GAMEDIR.get();
-        scanDirectoryForModIds(gameDir.resolve("mods"), discoveredMods);
-        scanDirectoryForModIds(gameDir.resolve("client_mods"), discoveredMods);
+        scanDirectoryForMods(gameDir.resolve("mods"));
+        scanDirectoryForMods(gameDir.resolve("client_mods"));
 
-        int added = 0;
-        for (String modId : discoveredMods) {
-            if (whitelist.add(modId)) {
-                added++;
-            }
-        }
-
+        int added = whitelist.size() - before;
         if (added > 0) {
-            GanjaGate.LOGGER.info("[GanjaGate] Auto-added {} mods (including client & JarJar mods) to whitelist (total: {})", added, whitelist.size());
+            GanjaGate.LOGGER.info("[GanjaGate] Added {} new mods to whitelist (total: {})", added, whitelist.size());
             save();
         }
     }
 
-    /**
-     * Просканировать директорию на наличие JAR файлов и извлечь их modId
-     */
-    private static void scanDirectoryForModIds(Path dir, Set<String> outModIds) {
-        if (!Files.exists(dir) || !Files.isDirectory(dir)) return;
+    private static void scanDirectoryForMods(Path dir) {
+        if (!Files.isDirectory(dir)) return;
 
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.jar")) {
             for (Path jarPath : stream) {
-                try (InputStream fis = Files.newInputStream(jarPath)) {
-                    scanZipStream(fis, outModIds, 0);
-                } catch (Exception ignored) {}
+                try {
+                    scanJarForMods(jarPath);
+                } catch (Exception e) {
+                    GanjaGate.LOGGER.debug("[GanjaGate] Could not scan {}: {}", jarPath.getFileName(), e.getMessage());
+                }
             }
         } catch (IOException e) {
-            GanjaGate.LOGGER.warn("[GanjaGate] Failed to scan directory {}", dir, e);
+            GanjaGate.LOGGER.warn("[GanjaGate] Failed to scan directory {}: {}", dir, e.getMessage());
         }
     }
 
-    /**
-     * Рекурсивно сканирует ZipInputStream для поиска манифестов (TOML/JSON) и вложенных JarJar архивов
-     */
-    private static void scanZipStream(InputStream inStream, Set<String> outModIds, int depth) {
-        if (depth > 2) return; // Предотвращение рекурсии
-        try (ZipInputStream zipIn = new ZipInputStream(inStream)) {
+    private static void scanJarForMods(Path jarPath) {
+        try (InputStream is = Files.newInputStream(jarPath);
+             ZipInputStream zis = new ZipInputStream(is)) {
+            
             ZipEntry entry;
-            while ((entry = zipIn.getNextEntry()) != null) {
+            while ((entry = zis.getNextEntry()) != null) {
                 String name = entry.getName();
 
                 if (name.equals("META-INF/neoforge.mods.toml") || name.equals("META-INF/mods.toml")) {
-                    parseTomlManifest(zipIn, outModIds);
-                } else if (name.equals("fabric.mod.json") || name.equals("quilt.mod.json")) {
-                    parseJsonManifest(zipIn, outModIds);
-                } else if ((name.startsWith("META-INF/jarjar/") || name.startsWith("META-INF/jars/")) && name.endsWith(".jar")) {
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n = zipIn.read(buf)) != -1) {
-                        baos.write(buf, 0, n);
-                    }
-                    scanZipStream(new ByteArrayInputStream(baos.toByteArray()), outModIds, depth + 1);
+                    extractModIdsFromToml(zis);
+                }
+                else if (name.startsWith("META-INF/jarjar/") && name.endsWith(".jar")) {
+                    byte[] nestedBytes = readAllBytes(zis);
+                    scanNestedJar(nestedBytes);
+                }
+                else if (name.startsWith("META-INF/jars/") && name.endsWith(".jar")) {
+                    byte[] nestedBytes = readAllBytes(zis);
+                    scanNestedJar(nestedBytes);
                 }
             }
         } catch (Exception ignored) {}
     }
 
-    private static void parseTomlManifest(InputStream is, Set<String> outModIds) {
+    private static void scanNestedJar(byte[] jarBytes) {
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(jarBytes))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName();
+                if (name.equals("META-INF/neoforge.mods.toml") || name.equals("META-INF/mods.toml")) {
+                    extractModIdsFromToml(zis);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private static void extractModIdsFromToml(InputStream is) {
         try {
             BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
             String line;
-            boolean inModsBlock = false;
             while ((line = reader.readLine()) != null) {
-                String trimmed = line.trim();
-                if (trimmed.startsWith("#")) continue;
-
-                if (trimmed.startsWith("[[")) {
-                    inModsBlock = trimmed.startsWith("[[mods]]");
-                } else if (inModsBlock && trimmed.contains("=")) {
-                    String[] parts = trimmed.split("=", 2);
-                    if (parts[0].trim().equals("modId")) {
-                        String modId = parts[1].trim();
-                        // Убираем кавычки и комментарии в конце строки (#mandatory и т.д.)
-                        int commentIdx = modId.indexOf('#');
-                        if (commentIdx >= 0) modId = modId.substring(0, commentIdx).trim();
-                        modId = modId.replace("\"", "").replace("'", "").toLowerCase();
-
+                line = line.trim();
+                if (line.startsWith("modId") && line.contains("=")) {
+                    String[] parts = line.split("=", 2);
+                    if (parts.length == 2) {
+                        String modId = parts[1].trim()
+                            .replace("\"", "")
+                            .replace("'", "")
+                            .toLowerCase();
                         if (!modId.isEmpty() && !modId.contains("${")) {
-                            outModIds.add(modId);
+                            whitelist.add(modId);
                         }
                     }
                 }
@@ -218,21 +181,14 @@ public class GateConfig {
         } catch (Exception ignored) {}
     }
 
-    private static void parseJsonManifest(InputStream is, Set<String> outModIds) {
-        try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
-            JsonObject json = GSON.fromJson(reader, JsonObject.class);
-            if (json != null) {
-                if (json.has("id")) {
-                    outModIds.add(json.get("id").getAsString().toLowerCase());
-                }
-                if (json.has("provides") && json.get("provides").isJsonArray()) {
-                    for (JsonElement el : json.getAsJsonArray("provides")) {
-                        outModIds.add(el.getAsString().toLowerCase());
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
+    private static byte[] readAllBytes(InputStream is) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] data = new byte[8192];
+        int nRead;
+        while ((nRead = is.read(data, 0, data.length)) != -1) {
+            buffer.write(data, 0, nRead);
+        }
+        return buffer.toByteArray();
     }
 
     private static void generateDefault() {
@@ -244,18 +200,6 @@ public class GateConfig {
     public static void save() {
         try {
             JsonObject root = new JsonObject();
-
-            // Client settings
-            JsonObject clientObj = new JsonObject();
-            clientObj.addProperty("enable_custom_title", enableCustomTitle);
-            clientObj.addProperty("title_template", titleTemplate);
-            clientObj.addProperty("title_in_game_template", titleInGameTemplate);
-            clientObj.addProperty("enable_custom_icon", enableCustomIcon);
-            clientObj.addProperty("icon_path_16", iconPath16);
-            clientObj.addProperty("icon_path_32", iconPath32);
-            clientObj.addProperty("icon_path_48", iconPath48);
-            root.add("client", clientObj);
-
             root.addProperty("strict", strictMode);
             root.addProperty("auto_update_whitelist", autoUpdateWhitelist);
             root.addProperty("kick_message", kickMessage);
@@ -269,34 +213,6 @@ public class GateConfig {
         } catch (IOException e) {
             GanjaGate.LOGGER.error("[GanjaGate] Failed to save config", e);
         }
-    }
-
-    public static boolean isEnableCustomTitle() {
-        return enableCustomTitle;
-    }
-
-    public static String getTitleTemplate() {
-        return titleTemplate;
-    }
-
-    public static String getTitleInGameTemplate() {
-        return titleInGameTemplate;
-    }
-
-    public static boolean isEnableCustomIcon() {
-        return enableCustomIcon;
-    }
-
-    public static String getIconPath16() {
-        return iconPath16;
-    }
-
-    public static String getIconPath32() {
-        return iconPath32;
-    }
-
-    public static String getIconPath48() {
-        return iconPath48;
     }
 
     public static Set<String> getWhitelist() {

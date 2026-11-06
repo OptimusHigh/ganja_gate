@@ -3,7 +3,7 @@ package ru.ganj4craft.gate;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +14,7 @@ import java.util.List;
  */
 public record ModListResponsePayload(long nonce, List<String> modIds) implements CustomPacketPayload {
     public static final Type<ModListResponsePayload> TYPE =
-        new Type<>(ResourceLocation.fromNamespaceAndPath(GanjaGate.MOD_ID, "mod_list_response"));
+        new Type<>(Identifier.fromNamespaceAndPath(GanjaGate.MOD_ID, "mod_list_response"));
 
     public static final StreamCodec<FriendlyByteBuf, ModListResponsePayload> STREAM_CODEC =
         StreamCodec.of(

@@ -1,12 +1,12 @@
 plugins {
     id 'java-library'
-    id 'net.neoforged.moddev' version '2.0.143'
+    id 'net.neoforged.moddev' version '2.0.141'
 }
 
 version = project.mod_version
 group = project.mod_group
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 repositories {
     mavenCentral()
@@ -40,7 +40,6 @@ jar {
         attributes([
             'Implementation-Title'  : project.mod_name,
             'Implementation-Version': project.mod_version,
-            'MixinConfigs'          : 'ganjagate.mixins.json',
         ])
     }
 }

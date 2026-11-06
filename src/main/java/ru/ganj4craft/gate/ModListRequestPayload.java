@@ -3,7 +3,7 @@ package ru.ganj4craft.gate;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * Сервер → Клиент: "Пришли мне список своих модов"
@@ -11,7 +11,7 @@ import net.minecraft.resources.ResourceLocation;
  */
 public record ModListRequestPayload(long nonce) implements CustomPacketPayload {
     public static final Type<ModListRequestPayload> TYPE = 
-        new Type<>(ResourceLocation.fromNamespaceAndPath(GanjaGate.MOD_ID, "mod_list_request"));
+        new Type<>(Identifier.fromNamespaceAndPath(GanjaGate.MOD_ID, "mod_list_request"));
 
     public static final StreamCodec<FriendlyByteBuf, ModListRequestPayload> STREAM_CODEC =
         StreamCodec.of(
