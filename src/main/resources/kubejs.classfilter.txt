@@ -1,0 +1,13 @@
+# GanjaCraft KubeJS ClassFilter
+# Allows Java HTTP client classes for async webhook telemetry to Telegram bot
++ java.net.http.HttpClient
++ java.net.http.HttpClient$Builder
++ java.net.http.HttpRequest
++ java.net.http.HttpRequest$Builder
++ java.net.http.HttpRequest$BodyPublishers
++ java.net.http.HttpRequest$BodyPublisher
++ java.net.http.HttpResponse
++ java.net.http.HttpResponse$BodyHandlers
++ java.net.http.HttpResponse$BodyHandler
++ java.net.URI
+
