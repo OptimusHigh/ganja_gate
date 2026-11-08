@@ -223,6 +223,10 @@ public class GateConfig {
         return strictMode;
     }
 
+    public static boolean isAutoUpdateWhitelist() {
+        return autoUpdateWhitelist;
+    }
+
     public static String getKickMessage() {
         return kickMessage;
     }

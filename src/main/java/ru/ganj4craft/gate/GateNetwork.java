@@ -143,6 +143,13 @@ public class GateNetwork {
         List<String> clientMods = payload.modIds();
         List<String> forbidden = GateConfig.checkClientMods(clientMods);
 
+        // Fallback: Just-in-Time refresh from disk if unlisted mods found
+        if (!forbidden.isEmpty() && GateConfig.isAutoUpdateWhitelist()) {
+            GanjaGate.LOGGER.info("[GanjaGate] Found unlisted mods for {}: {}. Performing dynamic on-the-fly disk scan...", playerName, forbidden);
+            GateConfig.load();
+            forbidden = GateConfig.checkClientMods(clientMods);
+        }
+
         if (forbidden.isEmpty()) {
             GanjaGate.LOGGER.info("[GanjaGate] ✓ {} passed mod check ({} mods)", playerName, clientMods.size());
         } else {

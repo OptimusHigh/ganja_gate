@@ -27,6 +27,7 @@ public class GanjaGate {
         modBus.addListener(GateNetwork::onRegisterPayloads);
         modBus.addListener(GateNetwork::onRegisterConfigurationTasks);
         NeoForge.EVENT_BUS.addListener(GateEvents::onPlayerLoggedIn);
+        NeoForge.EVENT_BUS.addListener(GateEvents::onRegisterCommands);
     }
 
     private void onCommonSetup(FMLCommonSetupEvent event) {
